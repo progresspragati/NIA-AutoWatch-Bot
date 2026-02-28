@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Settings>
+    <!-- Run browser in background without UI (true/false) -->
+    <Headless>false</Headless>
+    
+    <!-- Max wait time for page elements (in seconds) -->
+    <Timeout>15</Timeout>
+    
+    <!-- Number of times to check SCORM completion per video (500 = ~40 minutes) -->
+    <MaxRetries>500</MaxRetries>
+
+    <!-- Enable the video fast-forward hack (true/false). Set to false for natural playback. -->
+    <FastForward>false</FastForward>
+
+    <!-- Replay videos even if they are already marked as Done (true/false) -->
+    <ReplayDone>true</ReplayDone>
+
+    <!-- Mute audio during playback (true/false) -->
+    <Mute>false</Mute>
+    
+    <!-- Path to the CSV file containing user credentials -->
+    <UsersFile>users.csv</UsersFile>
+</Settings>

@@ -1,0 +1,30 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual Environment
+.venv/
+venv/
+ENV/
+
+# User Data (IMPORTANT: Protect credentials)
+users.csv
+course_info/
+comprehensive_course_info.csv
+
+# IDEs
+.vscode/
+.idea/
+
+# Selenium / Chrome artifacts
+*.log
+LICENSE.chromedriver
+chromedriver.exe
+<<<<<<< HEAD
+=======
+
+# System files
+.DS_Store
+Thumbs.db
+>>>>>>> b52e39a3-7bc5-4e18-a0e8-a4fbdf21e979
