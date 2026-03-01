@@ -16,7 +16,10 @@
     <ReplayDone>true</ReplayDone>
 
     <!-- Mute audio during playback (true/false) -->
-    <Mute>false</Mute>
+    <Mute>true</Mute>
+
+    <!-- Number of videos to process simultaneously (1-10) -->
+    <SimultaneousVideos>1</SimultaneousVideos>
     
     <!-- Path to the CSV file containing user credentials -->
     <UsersFile>users.csv</UsersFile>

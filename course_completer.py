@@ -2,6 +2,7 @@ import time
 import os
 import csv
 import argparse
+import concurrent.futures
 import xml.etree.ElementTree as ET
 from selenium import webdriver
 from selenium.webdriver.common.by import By
@@ -14,6 +15,7 @@ from webdriver_manager.chrome import ChromeDriverManager
 # --- CONFIGURATION ---
 URL_LOGIN = "https://onlinetraining.niapune.org.in/index.php"
 URL_COURSES = "https://onlinetraining.niapune.org.in/learner/learnerCourses.php"
+URL_DASHBOARD = "https://onlinetraining.niapune.org.in/learner/learnerDashboard.php"
 SETTINGS_FILE = "settings.xml"
 
 # JS snippet to find the SCORM API across frames
@@ -38,6 +40,7 @@ class Settings:
         self.fast_forward = True
         self.replay_done = False
         self.mute = True
+        self.simultaneous_videos = 1
         self.users_file = "users.csv"
 
 def get_settings():
@@ -68,6 +71,9 @@ def get_settings():
             mute_val = root.findtext("Mute", "true").lower()
             settings.mute = mute_val == "true"
             
+            sim_val = root.findtext("SimultaneousVideos", "1")
+            settings.simultaneous_videos = max(1, min(10, int(sim_val)))
+            
             settings.users_file = root.findtext("UsersFile", "users.csv")
             
             print(f"[INFO] Loaded configuration from {SETTINGS_FILE}")
@@ -83,6 +89,7 @@ def get_settings():
     parser.add_argument("--no-fast-forward", action="store_true")
     parser.add_argument("--replay-done", action="store_true")
     parser.add_argument("--unmute", action="store_true", help="Enable audio even if XML mutes it")
+    parser.add_argument("--simultaneous", type=int, help="Number of videos to run simultaneously (1-10)")
     parser.add_argument("--users-file", type=str)
     
     cli_args, unknown = parser.parse_known_args()
@@ -94,6 +101,7 @@ def get_settings():
     if cli_args.no_fast_forward: settings.fast_forward = False
     if cli_args.replay_done: settings.replay_done = True
     if cli_args.unmute: settings.mute = False
+    if cli_args.simultaneous: settings.simultaneous_videos = max(1, min(10, cli_args.simultaneous))
     if cli_args.users_file: settings.users_file = cli_args.users_file
 
     return settings
@@ -191,6 +199,7 @@ def complete_scorm_video(driver, lesson_url, lesson_name):
                         is_done = driver.execute_script(api_check)
                         
                         if is_done:
+                            should_close = True
                             # If we are NOT fast-forwarding, we must ensure the video has actually finished.
                             if not settings.fast_forward:
                                 try:
@@ -263,7 +272,6 @@ def process_user(driver, user):
     """Processes all courses for a single user account."""
     uid, pwd = user['Login_id'], user['Password']
     wait = WebDriverWait(driver, settings.timeout)
-    print(f"\n[USER] {uid} - Starting Course Automation...")
     
     # login
     driver.get(URL_LOGIN)
@@ -274,10 +282,54 @@ def process_user(driver, user):
     driver.find_element(By.ID, "submitform").click()
     time.sleep(3)
 
-    # course discovery
-    driver.get(URL_COURSES)
-    links = driver.find_elements(By.XPATH, "//a[contains(@href, 'cid=')]")
-    course_list = list(set([l.get_attribute("href").split("cid=")[-1] for l in links if "cid=" in l.get_attribute("href")]))
+    # identity discovery
+    user_display = uid
+    module_info = "Unknown"
+    try:
+        driver.get(URL_DASHBOARD)
+        time.sleep(2)
+        
+        # Try to find name specifically in the top bar
+        try:
+            name_el = driver.find_element(By.XPATH, "//div[contains(@class, 'user-profile')] | //*[contains(text(), 'Welcome')]")
+            raw_text = name_el.text
+            if "Welcome" in raw_text:
+                # Split at newline if the module info is grouped in the same div
+                name_only = raw_text.split("Welcome")[-1].split("\n")[0].strip()
+                user_display = f"{uid} [{name_only}]"
+        except: pass
+        
+        # Try to find module and type with broader XPATHs
+        try:
+            mod_el = driver.find_element(By.XPATH, "//*[contains(text(), 'Module Enrolled')]")
+            module_info = mod_el.text.split("Enrolled:")[-1].split("\n")[0].strip()
+            
+            type_el = driver.find_element(By.XPATH, "//*[contains(text(), 'Registration Type')]")
+            reg_type = type_el.text.split("Type:")[-1].split("\n")[0].strip()
+            module_info += f" ({reg_type})"
+        except: pass
+    except: pass
+
+    # CLEAN COMBINED HEADER
+    print(f"\n[USER] {user_display} - Starting Automation...")
+    print(f"      > Module: {module_info}")
+    course_list = []
+    discovery_urls = [URL_COURSES, URL_DASHBOARD]
+    
+    for url in discovery_urls:
+        driver.get(url)
+        time.sleep(3)
+        links = driver.find_elements(By.XPATH, "//a[contains(@href, 'cid=')]")
+        for l in links:
+            href = l.get_attribute("href")
+            if "cid=" in href:
+                cid = href.split("cid=")[-1].split("&")[0] # handle extra params
+                if cid and cid.isdigit():
+                    course_list.append(cid)
+        
+        if course_list: break # Found courses on this page, move on
+
+    course_list = list(set(course_list))
     
     if settings.course_id:
         course_list = [c for c in course_list if c == settings.course_id]
@@ -289,6 +341,7 @@ def process_user(driver, user):
         print(f"  [COURSE] Scanning Module CID {cid}...")
         
         seen_in_run = set()
+        total_items = -1
         while True:
             driver.get(course_url)
             time.sleep(4)
@@ -316,20 +369,61 @@ def process_user(driver, user):
                     except: pass
             
             if not to_process:
-                print(f"    - Module CID {cid}: No pending videos.")
+                print(f"    - Module CID {cid}: All pending videos completed!")
                 break
             
-            # Process strictly one per page refresh to maintain state sync
-            target_name, target_url = to_process[0]
-            try:
-                complete_scorm_video(driver, target_url, target_name)
-            except Exception as e:
-                print(f"    - [ERROR] Video interaction failed: {e}")
-                # If it's a connection error, bubble it up to main() to relaunch
-                if "connection" in str(e).lower() or "session id" in str(e).lower():
-                    raise e
+            if total_items == -1:
+                total_items = len(to_process)
             
-            seen_in_run.add(target_url)
+            # Handle simultaneous execution
+            batch_size = settings.simultaneous_videos
+            tasks = to_process[:batch_size]
+            
+            if batch_size > 1:
+                start_num = len(seen_in_run) + 1
+                end_num = min(len(seen_in_run) + len(tasks), total_items)
+                print(f"    - [SIMULTANEOUS] Processing batch {start_num}-{end_num} of {total_items}...")
+                def run_parallel_task(task_info):
+                    t_name, t_url = task_info
+                    # Find index within this specific course scan for a nicer name
+                    item_num = start_num + tasks.index(task_info)
+                    # Each thread needs its own driver and login
+                    try:
+                        t_driver = get_driver()
+                        # Quick login
+                        t_driver.get(URL_LOGIN)
+                        t_driver.find_element(By.ID, "username").send_keys(uid)
+                        t_driver.find_element(By.ID, "password").send_keys(pwd)
+                        t_driver.find_element(By.ID, "submitform").click()
+                        time.sleep(2)
+                        
+                        success = complete_scorm_video(t_driver, t_url, f"[{item_num}/{total_items}] {t_name}")
+                        t_driver.quit()
+                        return success
+                    except Exception as e:
+                        print(f"    - [ERROR] Parallel task failed for {t_name}: {e}")
+                        try: t_driver.quit()
+                        except: pass
+                        return False
+
+                with concurrent.futures.ThreadPoolExecutor(max_workers=batch_size) as executor:
+                    executor.map(run_parallel_task, tasks)
+                
+                # Mark as seen
+                for t_name, t_url in tasks:
+                    seen_in_run.add(t_url)
+            else:
+                # Original sequential logic
+                target_name, target_url = tasks[0]
+                current_num = len(seen_in_run) + 1
+                try:
+                    complete_scorm_video(driver, target_url, f"[{current_num}/{total_items}] {target_name}")
+                except Exception as e:
+                    print(f"    - [ERROR] Video interaction failed: {e}")
+                    if "connection" in str(e).lower() or "session id" in str(e).lower():
+                        raise e
+                seen_in_run.add(target_url)
+            
             time.sleep(2)
 
     print(f"  - Session for {uid} finished.")
