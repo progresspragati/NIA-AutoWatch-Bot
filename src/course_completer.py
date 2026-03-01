@@ -12,11 +12,19 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from webdriver_manager.chrome import ChromeDriverManager
 
-# --- CONFIGURATION ---
+# --- CONFIGURATION (Structure Support) ---
+# This allows the script to be run from root or from within the src/ folder
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.dirname(SCRIPT_DIR) if os.path.basename(SCRIPT_DIR) == "src" else SCRIPT_DIR
+
 URL_LOGIN = "https://onlinetraining.niapune.org.in/index.php"
 URL_COURSES = "https://onlinetraining.niapune.org.in/learner/learnerCourses.php"
 URL_DASHBOARD = "https://onlinetraining.niapune.org.in/learner/learnerDashboard.php"
-SETTINGS_FILE = "settings.xml"
+
+# Path to settings and user data
+SETTINGS_FILE = os.path.join(PROJECT_ROOT, "config", "settings.xml")
+DEFAULT_USERS_FILE = os.path.join(PROJECT_ROOT, "config", "users.csv")
+LOG_DIR = os.path.join(PROJECT_ROOT, "logs")
 
 # JS snippet to find the SCORM API across frames
 JS_FIND_API = """
@@ -43,7 +51,7 @@ class Settings:
         self.simultaneous_videos = 1
         self.simultaneous_users = 1
         self.info_only = False
-        self.users_file = "users.csv"
+        self.users_file = DEFAULT_USERS_FILE
 
 def get_settings():
     """Combines command line arguments and XML settings."""
@@ -82,7 +90,12 @@ def get_settings():
             info_val = root.findtext("InfoOnly", "false").lower()
             settings.info_only = info_val == "true"
             
-            settings.users_file = root.findtext("UsersFile", "users.csv")
+            user_file_val = root.findtext("UsersFile", "users.csv")
+            # If the XML only gives a filename (no dir), assume it's in config/
+            if not os.path.dirname(user_file_val):
+                settings.users_file = os.path.join(PROJECT_ROOT, "config", user_file_val)
+            else:
+                settings.users_file = os.path.join(PROJECT_ROOT, user_file_val)
             
             print(f"[INFO] Loaded configuration from {SETTINGS_FILE}")
         except Exception as e:
@@ -132,6 +145,7 @@ def get_driver():
         
     chrome_options.add_argument("--window-size=1920,1080")
     chrome_options.add_argument("--disable-notifications")
+    chrome_options.add_argument("--incognito")  # Added to ensure portal accessibility
     chrome_options.add_argument("--log-level=3")
     service = Service(ChromeDriverManager().install())
     return webdriver.Chrome(service=service, options=chrome_options)
@@ -463,8 +477,12 @@ def main():
     print("="*60)
     
     if not os.path.exists(settings.users_file):
-        print(f"[ERROR] {settings.users_file} not found. cannot start.")
+        print(f"[ERROR] {settings.users_file} not found. Cannot start.")
         return
+
+    # Ensure log directory exists
+    if not os.path.exists(LOG_DIR):
+        os.makedirs(LOG_DIR)
 
     users = []
     with open(settings.users_file, mode='r', encoding='utf-8') as f:

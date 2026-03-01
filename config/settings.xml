@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Settings>
     <!-- Run browser in background without UI (true/false) -->
-    <Headless>true</Headless>
+    <Headless>false</Headless>
     
     <!-- Max wait time for page elements (in seconds) -->
     <Timeout>15</Timeout>

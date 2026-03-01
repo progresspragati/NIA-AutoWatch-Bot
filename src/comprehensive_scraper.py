@@ -10,19 +10,24 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from webdriver_manager.chrome import ChromeDriverManager
 
-# --- CONFIGURATION ---
+# --- CONFIGURATION (Structure Support) ---
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.dirname(SCRIPT_DIR) if os.path.basename(SCRIPT_DIR) == "src" else SCRIPT_DIR
+
 URL_LOGIN = "https://onlinetraining.niapune.org.in/index.php"
 URL_SUMMARY = "https://onlinetraining.niapune.org.in/learner/learnerSummaryReport.php"
 URL_COURSES = "https://onlinetraining.niapune.org.in/learner/learnerCourses.php"
 
-USERS_FILE = "users.csv"
-OUTPUT_DIR = "course_info"
+# Adjusted paths
+USERS_FILE = os.path.join(PROJECT_ROOT, "config", "users.csv")
+OUTPUT_DIR = os.path.join(PROJECT_ROOT, "data", "course_info")
 
 def get_driver():
     """Builds and returns a Chrome WebDriver instance."""
     chrome_options = Options()
     # chrome_options.add_argument("--headless") # Uncomment for headless mode
     chrome_options.add_argument("--window-size=1920,1080")
+    chrome_options.add_argument("--incognito") # Added for portal access
     chrome_options.add_argument("--log-level=3") # Suppress logs
     service = Service(ChromeDriverManager().install())
     return webdriver.Chrome(service=service, options=chrome_options)

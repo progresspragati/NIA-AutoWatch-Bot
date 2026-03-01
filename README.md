@@ -4,18 +4,19 @@ Automate the completion of SCORM video lessons on the NIA training portal.
 
 ## 📋 Quick Setup
 
-1.  **Add Users**: Open `users.csv` and add your login IDs and passwords.
-2.  **Configure**: Open `settings.xml` to change options (Mute, FastForward, etc.).
+1.  **Add Users**: Open `config/users.csv` and add your login IDs and passwords.
+2.  **Configure**: Open `config/settings.xml` to change options (Mute, FastForward, etc.).
+3.  **Install dependencies**: `pip install -r requirements.txt`
 
 ## 🚀 How to Run
 
 Open your terminal in this folder and run:
 
 ```bash
-python course_completer.py
+python src/course_completer.py
 ```
 
-## ⚙️ Settings (settings.xml)
+## ⚙️ Settings (config/settings.xml)
 
 - **Headless**: Set to `true` to run the browser in the background (hidden).
 - **FastForward**: Set to `true` to skip to the end of videos instantly.
