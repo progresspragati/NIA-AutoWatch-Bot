@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Settings>
     <!-- Run browser in background without UI (true/false) -->
-    <Headless>false</Headless>
+    <Headless>true</Headless>
     
     <!-- Max wait time for page elements (in seconds) -->
     <Timeout>15</Timeout>
@@ -18,11 +18,15 @@
     <!-- Mute audio during playback (true/false) -->
     <Mute>true</Mute>
 
-    <!-- Number of videos to process simultaneously (1-10) -->
+    <!-- Number of videos PER USER to process simultaneously (1-10) -->
     <SimultaneousVideos>1</SimultaneousVideos>
 
+    <!-- Number of DIFFERENT USERS to process at once (1-5) -->
+    <!-- CAUTION: Higher numbers use more RAM -->
+    <SimultaneousUsers>1</SimultaneousUsers>
+
     <!-- Info Only mode: Only scan and show user/course info, do not watch videos (true/false) -->
-    <InfoOnly>false</InfoOnly>
+    <InfoOnly>true</InfoOnly>
     
     <!-- Path to the CSV file containing user credentials -->
     <UsersFile>users.csv</UsersFile>

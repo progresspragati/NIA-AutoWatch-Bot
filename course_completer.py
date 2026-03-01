@@ -41,6 +41,7 @@ class Settings:
         self.replay_done = False
         self.mute = True
         self.simultaneous_videos = 1
+        self.simultaneous_users = 1
         self.info_only = False
         self.users_file = "users.csv"
 
@@ -75,6 +76,9 @@ def get_settings():
             sim_val = root.findtext("SimultaneousVideos", "1")
             settings.simultaneous_videos = max(1, min(10, int(sim_val)))
             
+            sim_users_val = root.findtext("SimultaneousUsers", "1")
+            settings.simultaneous_users = max(1, min(10, int(sim_users_val)))
+            
             info_val = root.findtext("InfoOnly", "false").lower()
             settings.info_only = info_val == "true"
             
@@ -93,7 +97,8 @@ def get_settings():
     parser.add_argument("--no-fast-forward", action="store_true")
     parser.add_argument("--replay-done", action="store_true")
     parser.add_argument("--unmute", action="store_true", help="Enable audio even if XML mutes it")
-    parser.add_argument("--simultaneous", type=int, help="Number of videos to run simultaneously (1-10)")
+    parser.add_argument("--simultaneous", type=int, help="Number of videos to run simultaneously PER USER (1-10)")
+    parser.add_argument("--sim-users", type=int, help="Number of users to process at once (1-5)")
     parser.add_argument("--info-only", action="store_true", help="Only scan and show info, skip videos")
     parser.add_argument("--users-file", type=str)
     
@@ -107,6 +112,7 @@ def get_settings():
     if cli_args.replay_done: settings.replay_done = True
     if cli_args.unmute: settings.mute = False
     if cli_args.simultaneous: settings.simultaneous_videos = max(1, min(10, cli_args.simultaneous))
+    if cli_args.sim_users: settings.simultaneous_users = max(1, min(10, cli_args.sim_users))
     if cli_args.info_only: settings.info_only = True
     if cli_args.users_file: settings.users_file = cli_args.users_file
 
@@ -130,10 +136,10 @@ def get_driver():
     service = Service(ChromeDriverManager().install())
     return webdriver.Chrome(service=service, options=chrome_options)
 
-def complete_scorm_video(driver, lesson_url, lesson_name):
+def complete_scorm_video(driver, lesson_url, lesson_name, uid="System"):
     """Handles a single video completion task."""
     main_window = driver.current_window_handle
-    print(f"      - Processing: {lesson_name}")
+    print(f"[{uid}]       - Processing: {lesson_name}")
     driver.get(lesson_url)
     
     try:
@@ -148,7 +154,7 @@ def complete_scorm_video(driver, lesson_url, lesson_name):
             driver.switch_to.window(popup_window)
             
             mode = "Fast-Forward" if settings.fast_forward else "Natural Playback"
-            print(f"      - Player Popup Active ({mode})...")
+            print(f"[{uid}]       - Player Popup Active ({mode})...")
             
             try:
                 # Find the iframe containing the Articulate player
@@ -191,11 +197,11 @@ def complete_scorm_video(driver, lesson_url, lesson_name):
                         try:
                             _ = driver.window_handles
                         except:
-                            print("      - [CRITICAL] Browser connection lost.")
+                            print(f"[{uid}]       - [CRITICAL] Browser connection lost.")
                             return False
 
                         if len(driver.window_handles) < 2:
-                            print("      - [ERROR] Popup window closed unexpectedly.")
+                            print(f"[{uid}]       - [ERROR] Popup window closed unexpectedly.")
                             break
 
                         driver.execute_script(script_core, settings.fast_forward, settings.mute)
@@ -224,17 +230,17 @@ def complete_scorm_video(driver, lesson_url, lesson_name):
                                     if video_state == 'playing' or video_state == 'loading':
                                         should_close = False
                                         if i % 3 == 0: 
-                                            print(f"      - Video status: {video_state}. Waiting...")
+                                            print(f"[{uid}]       - Video status: {video_state}. Waiting...")
                                     elif video_state == 'no_video' and i < 10:
                                         # Give it a few retries to actually find the video element
                                         should_close = False
-                                        if i % 3 == 0: print("      - Waiting for video player to load...")
+                                        if i % 3 == 0: print(f"[{uid}]       - Waiting for video player to load...")
                                     
                                     driver.switch_to.default_content()
                                 except: pass
                             
                             if should_close:
-                                print(f"      - [SUCCESS] Module completed.")
+                                print(f"[{uid}]       - [SUCCESS] Module completed.")
                                 driver.close()
                                 driver.switch_to.window(main_window)
                                 return True
@@ -251,7 +257,7 @@ def complete_scorm_video(driver, lesson_url, lesson_name):
                         # Attempt one last force push only if window is still open
                         driver.switch_to.default_content()
                         driver.execute_script(JS_FIND_API + "var api=findAPI(window); if(api){api.LMSSetValue('cmi.core.lesson_status', 'completed'); api.LMSCommit('');}")
-                        print("      - [INFO] Closing popup.")
+                        print(f"[{uid}]       - [INFO] Closing popup.")
                         driver.close()
                 except: pass
             except Exception as player_e:
@@ -295,26 +301,35 @@ def process_user(driver, user):
         driver.get(URL_DASHBOARD)
         time.sleep(2)
         
-        # Try to find name specifically in the top bar
+        # Try to find name specifically in the top bar (case-insensitive)
         try:
-            name_el = driver.find_element(By.XPATH, "//div[contains(@class, 'user-profile')] | //*[contains(text(), 'Welcome')]")
+            name_el = driver.find_element(By.XPATH, "//body//*[contains(translate(text(), 'WELCOME', 'welcome'), 'welcome')]")
             raw_text = name_el.text
-            if "Welcome" in raw_text:
-                # Split at newline if the module info is grouped in the same div
-                name_only = raw_text.split("Welcome")[-1].split("\n")[0].strip()
+            if "welcome" in raw_text.lower():
+                name_only = raw_text.lower().split("welcome")[-1].split("\n")[0].strip()
+                # Restore original casing for name if possible
+                for p in raw_text.split("\n"):
+                    if "welcome" in p.lower():
+                        name_only = p.lower().split("welcome")[-1].strip().title()
                 user_display = f"{uid} [{name_only}]"
         except: pass
         
-        # Try to find module and type with broader XPATHs
+        # Try to find module and type with even broader XPATHs
         try:
-            mod_el = driver.find_element(By.XPATH, "//*[contains(text(), 'Module Enrolled')]")
-            module_info = mod_el.text.split("Enrolled:")[-1].split("\n")[0].strip()
-            
-            type_el = driver.find_element(By.XPATH, "//*[contains(text(), 'Registration Type')]")
-            reg_type = type_el.text.split("Type:")[-1].split("\n")[0].strip()
-            module_info += f" ({reg_type})"
+            # Search all elements that contain 'Module Enrolled' regardless of structure
+            page_text = driver.find_element(By.TAG_NAME, "body").text
+            for line in page_text.split("\n"):
+                if "Module Enrolled" in line:
+                    module_info = line.split("Enrolled:")[-1].strip()
+                if "Registration Type" in line:
+                    reg_type = line.split("Type:")[-1].strip()
+                    if module_info != "Unknown":
+                        module_info += f" ({reg_type})"
+                    else:
+                        module_info = reg_type
         except: pass
-    except: pass
+    except Exception as identity_e:
+        if settings.info_only: print(f"      - [DEBUG] Identity check failed: {identity_e}")
 
     # CLEAN COMBINED HEADER
     print(f"\n[USER] {user_display} - Starting Automation...")
@@ -340,11 +355,11 @@ def process_user(driver, user):
     if settings.course_id:
         course_list = [c for c in course_list if c == settings.course_id]
 
-    print(f"  - Verified {len(course_list)} enrolled course(s).")
+    print(f"[{uid}]   - Verified {len(course_list)} enrolled course(s).")
 
     for cid in course_list:
         course_url = f"https://onlinetraining.niapune.org.in/nlms/course/view.php?id={cid}"
-        print(f"  [COURSE] Scanning Module CID {cid}...")
+        print(f"[{uid}]   [COURSE] Scanning Module CID {cid}...")
         
         seen_in_run = set()
         total_items = -1
@@ -375,14 +390,14 @@ def process_user(driver, user):
                     except: pass
             
             if not to_process:
-                print(f"    - Module CID {cid}: All pending videos completed!")
+                print(f"[{uid}]     - Module CID {cid}: All pending videos completed!")
                 break
             
             if total_items == -1:
                 total_items = len(to_process)
             
             if settings.info_only:
-                print(f"    - [INFO ONLY] Found {total_items} pending videos for CID {cid}. Skipping playback.")
+                print(f"[{uid}]     - [INFO ONLY] Found {total_items} pending videos for CID {cid}. Skipping playback.")
                 # Mark all as seen so we don't loop forever in while True
                 for t_name, t_url in to_process:
                     seen_in_run.add(t_url)
@@ -395,7 +410,7 @@ def process_user(driver, user):
             if batch_size > 1:
                 start_num = len(seen_in_run) + 1
                 end_num = min(len(seen_in_run) + len(tasks), total_items)
-                print(f"    - [SIMULTANEOUS] Processing batch {start_num}-{end_num} of {total_items}...")
+                print(f"[{uid}]     - [SIMULTANEOUS] Processing batch {start_num}-{end_num} of {total_items}...")
                 def run_parallel_task(task_info):
                     t_name, t_url = task_info
                     # Find index within this specific course scan for a nicer name
@@ -410,11 +425,11 @@ def process_user(driver, user):
                         t_driver.find_element(By.ID, "submitform").click()
                         time.sleep(2)
                         
-                        success = complete_scorm_video(t_driver, t_url, f"[{item_num}/{total_items}] {t_name}")
+                        success = complete_scorm_video(t_driver, t_url, f"[{item_num}/{total_items}] {t_name}", uid)
                         t_driver.quit()
                         return success
                     except Exception as e:
-                        print(f"    - [ERROR] Parallel task failed for {t_name}: {e}")
+                        print(f"[{uid}]     - [ERROR] Parallel task failed for {t_name}: {e}")
                         try: t_driver.quit()
                         except: pass
                         return False
@@ -430,16 +445,16 @@ def process_user(driver, user):
                 target_name, target_url = tasks[0]
                 current_num = len(seen_in_run) + 1
                 try:
-                    complete_scorm_video(driver, target_url, f"[{current_num}/{total_items}] {target_name}")
+                    complete_scorm_video(driver, target_url, f"[{current_num}/{total_items}] {target_name}", uid)
                 except Exception as e:
-                    print(f"    - [ERROR] Video interaction failed: {e}")
+                    print(f"[{uid}]     - [ERROR] Video interaction failed: {e}")
                     if "connection" in str(e).lower() or "session id" in str(e).lower():
                         raise e
                 seen_in_run.add(target_url)
             
             time.sleep(2)
-
-    print(f"  - Session for {uid} finished.")
+            
+    print(f"[{uid}]   - Session for {uid} finished.")
     driver.delete_all_cookies()
 
 def main():
@@ -455,31 +470,51 @@ def main():
     with open(settings.users_file, mode='r', encoding='utf-8') as f:
         users = list(csv.DictReader(f))
 
-    driver = get_driver()
-    try:
-        for user_data in users:
-            # Self-healing: verify driver connection
-            try:
-                driver.title
-            except:
-                print("[INFO] Re-initializing lost browser connection...")
-                driver = get_driver()
-
-            try:
-                process_user(driver, user_data)
-            except Exception as fatal_user_e:
-                print(f"[FATAL ERROR] User {user_data['Login_id']} session aborted: {fatal_user_e}")
-                # Relaunch driver to ensure clean state for next user
+    def run_user_parallel(user_data):
+        """Task for a single user thread."""
+        driver = None
+        try:
+            driver = get_driver()
+            process_user(driver, user_data)
+        except Exception as fatal_user_e:
+            print(f"[FATAL ERROR] User {user_data.get('Login_id', 'Unknown')} session aborted: {fatal_user_e}")
+        finally:
+            if driver:
                 try: driver.quit()
                 except: pass
-                driver = get_driver()
 
-    finally:
-        try: driver.quit()
-        except: pass
-        print("\n" + "="*60)
-        print("🎉 AUTOMATION FINISHED - ALL USERS PROCESSED")
-        print("="*60)
+    if settings.simultaneous_users > 1:
+        print(f"[INFO] Using Simultaneous User Threads: {settings.simultaneous_users}")
+        with concurrent.futures.ThreadPoolExecutor(max_workers=settings.simultaneous_users) as executor:
+            executor.map(run_user_parallel, users)
+    else:
+        # Sequential processing (original behavior)
+        driver = get_driver()
+        try:
+            for user_data in users:
+                # Self-healing: verify driver connection
+                try:
+                    driver.title
+                except:
+                    print("[INFO] Re-initializing lost browser connection...")
+                    driver = get_driver()
+
+                try:
+                    process_user(driver, user_data)
+                except Exception as fatal_user_e:
+                    print(f"[FATAL ERROR] User {user_data['Login_id']} session aborted: {fatal_user_e}")
+                    # Relaunch driver to ensure clean state for next user
+                    try: driver.quit()
+                    except: pass
+                    driver = get_driver()
+        finally:
+            if driver:
+                try: driver.quit()
+                except: pass
+
+    print("\n" + "="*60)
+    print("🎉 AUTOMATION FINISHED - ALL USERS PROCESSED")
+    print("="*60)
 
 if __name__ == "__main__":
     main()
