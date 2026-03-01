@@ -45,14 +45,14 @@ class Settings:
         self.info_only = False
         self.users_file = "users.csv"
 
-def get_settings():
+def get_settings(settings_file=SETTINGS_FILE):
     """Combines command line arguments and XML settings."""
     settings = Settings()
 
     # 1. Parse XML settings if file exists
-    if os.path.exists(SETTINGS_FILE):
+    if os.path.exists(settings_file):
         try:
-            tree = ET.parse(SETTINGS_FILE)
+            tree = ET.parse(settings_file)
             root = tree.getroot()
             
             headless_val = root.findtext("Headless", "false").lower()
@@ -84,9 +84,9 @@ def get_settings():
             
             settings.users_file = root.findtext("UsersFile", "users.csv")
             
-            print(f"[INFO] Loaded configuration from {SETTINGS_FILE}")
+            print(f"[INFO] Loaded configuration from {settings_file}")
         except Exception as e:
-            print(f"[WARN] Error parsing {SETTINGS_FILE}: {e}. Defaults used.")
+            print(f"[WARN] Error parsing {settings_file}: {e}. Defaults used.")
 
     # 2. Parse command line arguments (priority overrides)
     parser = argparse.ArgumentParser(description="NIA-AutoWatch-Bot")
@@ -118,16 +118,13 @@ def get_settings():
 
     return settings
 
-# Global settings instance
-settings = get_settings()
-
-def get_driver():
+def get_driver(settings_obj):
     """Initializes a fresh Chrome WebDriver."""
     chrome_options = Options()
-    if settings.headless:
+    if settings_obj.headless:
         chrome_options.add_argument("--headless")
     
-    if settings.mute:
+    if settings_obj.mute:
         chrome_options.add_argument("--mute-audio")
         
     chrome_options.add_argument("--window-size=1920,1080")
@@ -136,7 +133,7 @@ def get_driver():
     service = Service(ChromeDriverManager().install())
     return webdriver.Chrome(service=service, options=chrome_options)
 
-def complete_scorm_video(driver, lesson_url, lesson_name, uid="System"):
+def complete_scorm_video(driver, settings_obj, lesson_url, lesson_name, uid="System"):
     """Handles a single video completion task."""
     main_window = driver.current_window_handle
     print(f"[{uid}]       - Processing: {lesson_name}")
@@ -153,7 +150,7 @@ def complete_scorm_video(driver, lesson_url, lesson_name, uid="System"):
             popup_window = driver.window_handles[-1]
             driver.switch_to.window(popup_window)
             
-            mode = "Fast-Forward" if settings.fast_forward else "Natural Playback"
+            mode = "Fast-Forward" if settings_obj.fast_forward else "Natural Playback"
             print(f"[{uid}]       - Player Popup Active ({mode})...")
             
             try:
@@ -191,7 +188,7 @@ def complete_scorm_video(driver, lesson_url, lesson_name, uid="System"):
                 """
 
                 # Main loop waiting for completion
-                for i in range(settings.max_retries):
+                for i in range(settings_obj.max_retries):
                     try:
                         # 0. Defensive check: Is the driver/browser still alive?
                         try:
@@ -204,7 +201,7 @@ def complete_scorm_video(driver, lesson_url, lesson_name, uid="System"):
                             print(f"[{uid}]       - [ERROR] Popup window closed unexpectedly.")
                             break
 
-                        driver.execute_script(script_core, settings.fast_forward, settings.mute)
+                        driver.execute_script(script_core, settings_obj.fast_forward, settings_obj.mute)
                         
                         # Check API status
                         driver.switch_to.default_content()
@@ -213,7 +210,7 @@ def complete_scorm_video(driver, lesson_url, lesson_name, uid="System"):
                         if is_done:
                             should_close = True
                             # If we are NOT fast-forwarding, we must ensure the video has actually finished.
-                            if not settings.fast_forward:
+                            if not settings_obj.fast_forward:
                                 try:
                                     driver.switch_to.frame(iframe)
                                     # This script checks:
@@ -280,10 +277,10 @@ def complete_scorm_video(driver, lesson_url, lesson_name, uid="System"):
         except: pass
         return False
 
-def process_user(driver, user):
+def process_user(driver, settings_obj, user):
     """Processes all courses for a single user account."""
     uid, pwd = user['Login_id'], user['Password']
-    wait = WebDriverWait(driver, settings.timeout)
+    wait = WebDriverWait(driver, settings_obj.timeout)
     
     # login
     driver.get(URL_LOGIN)
@@ -329,7 +326,7 @@ def process_user(driver, user):
                         module_info = reg_type
         except: pass
     except Exception as identity_e:
-        if settings.info_only: print(f"      - [DEBUG] Identity check failed: {identity_e}")
+        if settings_obj.info_only: print(f"      - [DEBUG] Identity check failed: {identity_e}")
 
     # CLEAN COMBINED HEADER
     print(f"\n[USER] {user_display} - Starting Automation...")
@@ -352,8 +349,8 @@ def process_user(driver, user):
 
     course_list = list(set(course_list))
     
-    if settings.course_id:
-        course_list = [c for c in course_list if c == settings.course_id]
+    if settings_obj.course_id:
+        course_list = [c for c in course_list if c == settings_obj.course_id]
 
     print(f"[{uid}]   - Verified {len(course_list)} enrolled course(s).")
 
@@ -380,7 +377,7 @@ def process_user(driver, user):
                 is_done = "Done" in content
                 is_todo = "To do" in content or not is_done
                 
-                if settings.replay_done or is_todo:
+                if settings_obj.replay_done or is_todo:
                     try:
                         anchor = item.find_element(By.CSS_SELECTOR, "a.aalink")
                         href = anchor.get_attribute("href")
@@ -396,7 +393,7 @@ def process_user(driver, user):
             if total_items == -1:
                 total_items = len(to_process)
             
-            if settings.info_only:
+            if settings_obj.info_only:
                 print(f"[{uid}]     - [INFO ONLY] Found {total_items} pending videos for CID {cid}. Skipping playback.")
                 # Mark all as seen so we don't loop forever in while True
                 for t_name, t_url in to_process:
@@ -404,7 +401,7 @@ def process_user(driver, user):
                 continue
 
             # Handle simultaneous execution
-            batch_size = settings.simultaneous_videos
+            batch_size = settings_obj.simultaneous_videos
             tasks = to_process[:batch_size]
             
             if batch_size > 1:
@@ -417,7 +414,7 @@ def process_user(driver, user):
                     item_num = start_num + tasks.index(task_info)
                     # Each thread needs its own driver and login
                     try:
-                        t_driver = get_driver()
+                        t_driver = get_driver(settings_obj)
                         # Quick login
                         t_driver.get(URL_LOGIN)
                         t_driver.find_element(By.ID, "username").send_keys(uid)
@@ -425,7 +422,7 @@ def process_user(driver, user):
                         t_driver.find_element(By.ID, "submitform").click()
                         time.sleep(2)
                         
-                        success = complete_scorm_video(t_driver, t_url, f"[{item_num}/{total_items}] {t_name}", uid)
+                        success = complete_scorm_video(t_driver, settings_obj, t_url, f"[{item_num}/{total_items}] {t_name}", uid)
                         t_driver.quit()
                         return success
                     except Exception as e:
@@ -445,7 +442,7 @@ def process_user(driver, user):
                 target_name, target_url = tasks[0]
                 current_num = len(seen_in_run) + 1
                 try:
-                    complete_scorm_video(driver, target_url, f"[{current_num}/{total_items}] {target_name}", uid)
+                    complete_scorm_video(driver, settings_obj, target_url, f"[{current_num}/{total_items}] {target_name}", uid)
                 except Exception as e:
                     print(f"[{uid}]     - [ERROR] Video interaction failed: {e}")
                     if "connection" in str(e).lower() or "session id" in str(e).lower():
@@ -457,39 +454,42 @@ def process_user(driver, user):
     print(f"[{uid}]   - Session for {uid} finished.")
     driver.delete_all_cookies()
 
+def run_user_parallel(user_data, settings_obj):
+    """Task for a single user thread."""
+    driver = None
+    try:
+        driver = get_driver(settings_obj)
+        process_user(driver, settings_obj, user_data)
+    except Exception as fatal_user_e:
+        print(f"[FATAL ERROR] User {user_data.get('Login_id', 'Unknown')} session aborted: {fatal_user_e}")
+    finally:
+        if driver:
+            try: driver.quit()
+            except: pass
+
 def main():
+    settings_obj = get_settings()
     print("="*60)
     print("🚀 NIA-AutoWatch-Bot v2.0 - STARTING")
     print("="*60)
     
-    if not os.path.exists(settings.users_file):
-        print(f"[ERROR] {settings.users_file} not found. cannot start.")
+    if not os.path.exists(settings_obj.users_file):
+        print(f"[ERROR] {settings_obj.users_file} not found. cannot start.")
         return
 
     users = []
-    with open(settings.users_file, mode='r', encoding='utf-8') as f:
+    with open(settings_obj.users_file, mode='r', encoding='utf-8') as f:
         users = list(csv.DictReader(f))
 
-    def run_user_parallel(user_data):
-        """Task for a single user thread."""
-        driver = None
-        try:
-            driver = get_driver()
-            process_user(driver, user_data)
-        except Exception as fatal_user_e:
-            print(f"[FATAL ERROR] User {user_data.get('Login_id', 'Unknown')} session aborted: {fatal_user_e}")
-        finally:
-            if driver:
-                try: driver.quit()
-                except: pass
-
-    if settings.simultaneous_users > 1:
-        print(f"[INFO] Using Simultaneous User Threads: {settings.simultaneous_users}")
-        with concurrent.futures.ThreadPoolExecutor(max_workers=settings.simultaneous_users) as executor:
-            executor.map(run_user_parallel, users)
+    if settings_obj.simultaneous_users > 1:
+        print(f"[INFO] Using Simultaneous User Threads: {settings_obj.simultaneous_users}")
+        with concurrent.futures.ThreadPoolExecutor(max_workers=settings_obj.simultaneous_users) as executor:
+            # Wrap settings_obj in the map call
+            futures = [executor.submit(run_user_parallel, u, settings_obj) for u in users]
+            concurrent.futures.wait(futures)
     else:
         # Sequential processing (original behavior)
-        driver = get_driver()
+        driver = get_driver(settings_obj)
         try:
             for user_data in users:
                 # Self-healing: verify driver connection
@@ -497,16 +497,16 @@ def main():
                     driver.title
                 except:
                     print("[INFO] Re-initializing lost browser connection...")
-                    driver = get_driver()
+                    driver = get_driver(settings_obj)
 
                 try:
-                    process_user(driver, user_data)
+                    process_user(driver, settings_obj, user_data)
                 except Exception as fatal_user_e:
                     print(f"[FATAL ERROR] User {user_data['Login_id']} session aborted: {fatal_user_e}")
                     # Relaunch driver to ensure clean state for next user
                     try: driver.quit()
                     except: pass
-                    driver = get_driver()
+                    driver = get_driver(settings_obj)
         finally:
             if driver:
                 try: driver.quit()

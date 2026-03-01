@@ -15,6 +15,21 @@ Open your terminal in this folder and run:
 python course_completer.py
 ```
 
+## 🧪 Testing the Bot (Safe Mode)
+
+Before starting a real run, you can run automated tests to make sure the robot is working correctly. These tests do not actually log into the real NIA portal and do not watch any videos.
+
+1.  **Open your terminal.**
+2.  **Activate your virtual environment:**
+    ```powershell
+    .\.venv\Scripts\Activate.ps1
+    ```
+3.  **Run the tests:**
+    ```powershell
+    python tests/test_settings.py
+    python tests/test_simulation.py
+    ```
+
 ## ⚙️ Settings (settings.xml)
 
 - **Headless**: Set to `true` to run the browser in the background (hidden).
