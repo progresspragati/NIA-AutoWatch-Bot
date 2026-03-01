@@ -41,6 +41,7 @@ class Settings:
         self.replay_done = False
         self.mute = True
         self.simultaneous_videos = 1
+        self.info_only = False
         self.users_file = "users.csv"
 
 def get_settings():
@@ -74,6 +75,9 @@ def get_settings():
             sim_val = root.findtext("SimultaneousVideos", "1")
             settings.simultaneous_videos = max(1, min(10, int(sim_val)))
             
+            info_val = root.findtext("InfoOnly", "false").lower()
+            settings.info_only = info_val == "true"
+            
             settings.users_file = root.findtext("UsersFile", "users.csv")
             
             print(f"[INFO] Loaded configuration from {SETTINGS_FILE}")
@@ -90,6 +94,7 @@ def get_settings():
     parser.add_argument("--replay-done", action="store_true")
     parser.add_argument("--unmute", action="store_true", help="Enable audio even if XML mutes it")
     parser.add_argument("--simultaneous", type=int, help="Number of videos to run simultaneously (1-10)")
+    parser.add_argument("--info-only", action="store_true", help="Only scan and show info, skip videos")
     parser.add_argument("--users-file", type=str)
     
     cli_args, unknown = parser.parse_known_args()
@@ -102,6 +107,7 @@ def get_settings():
     if cli_args.replay_done: settings.replay_done = True
     if cli_args.unmute: settings.mute = False
     if cli_args.simultaneous: settings.simultaneous_videos = max(1, min(10, cli_args.simultaneous))
+    if cli_args.info_only: settings.info_only = True
     if cli_args.users_file: settings.users_file = cli_args.users_file
 
     return settings
@@ -375,6 +381,13 @@ def process_user(driver, user):
             if total_items == -1:
                 total_items = len(to_process)
             
+            if settings.info_only:
+                print(f"    - [INFO ONLY] Found {total_items} pending videos for CID {cid}. Skipping playback.")
+                # Mark all as seen so we don't loop forever in while True
+                for t_name, t_url in to_process:
+                    seen_in_run.add(t_url)
+                continue
+
             # Handle simultaneous execution
             batch_size = settings.simultaneous_videos
             tasks = to_process[:batch_size]

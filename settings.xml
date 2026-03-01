@@ -20,6 +20,9 @@
 
     <!-- Number of videos to process simultaneously (1-10) -->
     <SimultaneousVideos>1</SimultaneousVideos>
+
+    <!-- Info Only mode: Only scan and show user/course info, do not watch videos (true/false) -->
+    <InfoOnly>false</InfoOnly>
     
     <!-- Path to the CSV file containing user credentials -->
     <UsersFile>users.csv</UsersFile>
