@@ -9,7 +9,7 @@ venv/
 ENV/
 
 # User Data (IMPORTANT: Protect credentials)
-users.csv
+#users.csv
 course_info/
 comprehensive_course_info.csv
 
@@ -21,10 +21,3 @@ comprehensive_course_info.csv
 *.log
 LICENSE.chromedriver
 chromedriver.exe
-<<<<<<< HEAD
-=======
-
-# System files
-.DS_Store
-Thumbs.db
->>>>>>> b52e39a3-7bc5-4e18-a0e8-a4fbdf21e979

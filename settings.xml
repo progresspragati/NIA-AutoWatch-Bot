@@ -26,7 +26,7 @@
     <SimultaneousUsers>1</SimultaneousUsers>
 
     <!-- Info Only mode: Only scan and show user/course info, do not watch videos (true/false) -->
-    <InfoOnly>true</InfoOnly>
+    <InfoOnly>false</InfoOnly>
     
     <!-- Path to the CSV file containing user credentials -->
     <UsersFile>users.csv</UsersFile>
