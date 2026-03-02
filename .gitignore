@@ -9,15 +9,22 @@ venv/
 ENV/
 
 # User Data (IMPORTANT: Protect credentials)
-#users.csv
-course_info/
+config/users.csv
+data/course_info/
 comprehensive_course_info.csv
+
+# Logs
+logs/
+*.log
 
 # IDEs
 .vscode/
 .idea/
 
 # Selenium / Chrome artifacts
-*.log
 LICENSE.chromedriver
 chromedriver.exe
+
+# System files
+.DS_Store
+Thumbs.db
