@@ -20,11 +20,11 @@ class TestSettings(unittest.TestCase):
         """Verify that settings are correctly loaded from an XML file."""
         xml_path = "tmp_test_settings.xml"
         root = ET.Element("Settings")
-        ET.SubElement(root, "Headless").text = "true"
-        ET.SubElement(root, "Timeout").text = "45"
-        ET.SubElement(root, "MaxRetries").text = "100"
+        ET.SubElement(root, "HideBrowser").text = "true"
+        ET.SubElement(root, "WaitTimeout").text = "45"
+        ET.SubElement(root, "MaxCompletionChecks").text = "100"
         ET.SubElement(root, "FastForward").text = "false"
-        ET.SubElement(root, "Mute").text = "false"
+        ET.SubElement(root, "MuteAudio").text = "false"
         
         tree = ET.ElementTree(root)
         tree.write(xml_path)
