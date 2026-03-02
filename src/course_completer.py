@@ -63,34 +63,25 @@ def get_settings(settings_file=SETTINGS_FILE):
             tree = ET.parse(settings_file)
             root = tree.getroot()
             
-            headless_val = root.findtext("Headless", "false").lower()
-            settings.headless = headless_val == "true"
+            # Browser & System
+            settings.headless = root.findtext("HideBrowser", "false").lower() == "true"
+            settings.timeout = int(root.findtext("WaitTimeout", "15"))
+            settings.max_retries = int(root.findtext("MaxCompletionChecks", "500"))
             
-            timeout_val = root.findtext("Timeout", "15")
-            settings.timeout = int(timeout_val)
+            # Automation Logic
+            settings.fast_forward = root.findtext("FastForward", "true").lower() == "true"
+            settings.replay_done = root.findtext("ProcessCompletedVideos", "false").lower() == "true"
+            settings.mute = root.findtext("MuteAudio", "true").lower() == "true"
             
-            retries_val = root.findtext("MaxRetries", "15")
-            settings.max_retries = int(retries_val)
+            # Mode
+            settings.info_only = root.findtext("ScanOnlyMode", "false").lower() == "true"
             
-            ff_val = root.findtext("FastForward", "true").lower()
-            settings.fast_forward = ff_val == "true"
+            # Performance
+            settings.simultaneous_videos = max(1, min(10, int(root.findtext("VideosPerUser", "1"))))
+            settings.simultaneous_users = max(1, min(10, int(root.findtext("ConcurrentUsers", "1"))))
             
-            rd_val = root.findtext("ReplayDone", "false").lower()
-            settings.replay_done = rd_val == "true"
-            
-            mute_val = root.findtext("Mute", "true").lower()
-            settings.mute = mute_val == "true"
-            
-            sim_val = root.findtext("SimultaneousVideos", "1")
-            settings.simultaneous_videos = max(1, min(10, int(sim_val)))
-            
-            sim_users_val = root.findtext("SimultaneousUsers", "1")
-            settings.simultaneous_users = max(1, min(10, int(sim_users_val)))
-            
-            info_val = root.findtext("InfoOnly", "false").lower()
-            settings.info_only = info_val == "true"
-            
-            user_file_val = root.findtext("UsersFile", "users.csv")
+            # Files
+            user_file_val = root.findtext("CredentialFile", "users.csv")
             # If the XML only gives a filename (no dir), assume it's in config/
             if not os.path.dirname(user_file_val):
                 settings.users_file = os.path.join(PROJECT_ROOT, "config", user_file_val)

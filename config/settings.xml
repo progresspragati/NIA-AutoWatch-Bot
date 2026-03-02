@@ -1,33 +1,32 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Settings>
-    <!-- Run browser in background without UI (true/false) -->
-    <Headless>false</Headless>
-    
-    <!-- Max wait time for page elements (in seconds) -->
-    <Timeout>15</Timeout>
-    
-    <!-- Number of times to check SCORM completion per video (500 = ~40 minutes) -->
-    <MaxRetries>500</MaxRetries>
+    <!-- MODE SETTINGS -->
+    <!-- Set to 'true' to only scan courses without watching videos -->
+    <ScanOnlyMode>false</ScanOnlyMode>
 
-    <!-- Enable the video fast-forward hack (true/false). Set to false for natural playback. -->
+    <!-- AUTOMATION LOGIC -->
+    <!-- Instantly skip to the end of videos (true/false) -->
     <FastForward>false</FastForward>
+    <!-- Keep the automation silent (true/false) -->
+    <MuteAudio>true</MuteAudio>
+    <!-- Re-watch videos even if they are already marked 'Done' (true/false) -->
+    <ProcessCompletedVideos>false</ProcessCompletedVideos>
 
-    <!-- Replay videos even if they are already marked as Done (true/false) -->
-    <ReplayDone>true</ReplayDone>
+    <!-- PERFORMANCE & SCALE -->
+    <!-- Number of different user accounts to process at once (1-5) -->
+    <ConcurrentUsers>1</ConcurrentUsers>
+    <!-- Number of videos per user to play simultaneously (1-10) -->
+    <VideosPerUser>1</VideosPerUser>
 
-    <!-- Mute audio during playback (true/false) -->
-    <Mute>true</Mute>
+    <!-- BROWSER & CONNECTION -->
+    <!-- Run browser hidden in the background (true/false) -->
+    <HideBrowser>false</HideBrowser>
+    <!-- Seconds to wait for page elements to load -->
+    <WaitTimeout>15</WaitTimeout>
+    <!-- Max times to check for video completion per lesson -->
+    <MaxCompletionChecks>500</MaxCompletionChecks>
 
-    <!-- Number of videos PER USER to process simultaneously (1-10) -->
-    <SimultaneousVideos>1</SimultaneousVideos>
-
-    <!-- Number of DIFFERENT USERS to process at once (1-5) -->
-    <!-- CAUTION: Higher numbers use more RAM -->
-    <SimultaneousUsers>1</SimultaneousUsers>
-
-    <!-- Info Only mode: Only scan and show user/course info, do not watch videos (true/false) -->
-    <InfoOnly>false</InfoOnly>
-    
-    <!-- Path to the CSV file containing user credentials -->
-    <UsersFile>users.csv</UsersFile>
+    <!-- DATA SOURCES -->
+    <!-- Name of the CSV file in config/ folder -->
+    <CredentialFile>users.csv</CredentialFile>
 </Settings>
