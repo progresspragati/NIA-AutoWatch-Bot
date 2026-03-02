@@ -3,8 +3,8 @@ from unittest.mock import MagicMock, patch
 import os
 import sys
 
-# Add parent directory to path so we can import course_completer
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Add src directory to path so we can import course_completer
+sys.path.append(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "src"))
 from course_completer import process_user, Settings
 from selenium.webdriver.common.by import By
 

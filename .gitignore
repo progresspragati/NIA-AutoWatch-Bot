@@ -9,7 +9,7 @@ venv/
 ENV/
 
 # User Data (IMPORTANT: Protect credentials)
-config/users.csv
+#config/users.csv
 data/course_info/
 comprehensive_course_info.csv
 

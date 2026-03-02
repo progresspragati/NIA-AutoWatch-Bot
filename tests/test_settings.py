@@ -3,8 +3,8 @@ import os
 import xml.etree.ElementTree as ET
 import sys
 
-# Add parent directory to path so we can import course_completer
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Add src directory to path so we can import course_completer
+sys.path.append(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "src"))
 from course_completer import get_settings, Settings
 
 class TestSettings(unittest.TestCase):
