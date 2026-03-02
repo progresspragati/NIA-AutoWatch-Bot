@@ -109,7 +109,3 @@ Automation_watch/
 - **Missing Module**: Ensure you are running with `.\.venv\Scripts\python.exe`.
 - **Browser Error**: Update your Google Chrome to the latest version.
 - **Login Failed**: Verify your credentials in `config/users.csv`.
-
----
-
-_Maintained with ❤️ for the NIA community._
