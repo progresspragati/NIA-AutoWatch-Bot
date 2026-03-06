@@ -10,8 +10,11 @@ Built with Python and Selenium, designed for reliability, speed, and ease of use
 - 📂 **Structured Architecture**: Clean separation of source code, configuration, and data.
 - ⚡ **Turbo Mode**: Fast-forward videos to 99% completion instantly.
 - 👯 **Parallel Processing**: Multi-threaded support for processing multiple accounts or videos at once.
-- 🧪 **Test Suite**: Comprehensive unit and integration tests (10+ tests) to verify logic safely.
+- 🧪 **Test Suite**: Comprehensive unit and integration tests (11 tests) to verify logic safely.
 - 🛡️ **Self-Healing**: Automatically detects browser crashes or connection losses and resumes.
+- 🛑 **Graceful Shutdown**: Hit `Ctrl+C` to safely terminate the script and close all browser windows instantly.
+- 📊 **Smart Dashboard Scanning**: Extracts "Remaining Hours" directly from the dashboard for real-time progress tracking.
+- 🔍 **E2E Integration**: Includes a simulated portal environment to test the full login & navigation flow.
 
 ---
 
@@ -53,6 +56,14 @@ Execute the bot using the dedicated environment python:
 .\.venv\Scripts\python.exe src\course_completer.py
 ```
 
+### Graceful Exit
+
+If you need to stop the automation early, simply press **Ctrl+C**. The script will:
+
+1.  Detect the interrupt.
+2.  Stop all active video threads.
+3.  Automatically close all open browser windows for you.
+
 ### Advanced CLI Overrides
 
 You can override any XML setting directly from the command line:
@@ -66,16 +77,20 @@ You can override any XML setting directly from the command line:
 
 ## 🧪 Testing & Quality Assurance
 
-We take code quality seriously. Before contributing or running on a live account, run the test suite:
+We take code quality seriously. To run the full test suite (including the new browser-based integration tests):
 
 ```powershell
-# Run all logic and integration tests
-.\.venv\Scripts\python.exe tests\test_settings.py
-.\.venv\Scripts\python.exe tests\test_simulation.py
-.\.venv\Scripts\python.exe tests\test_video_logic.py
-.\.venv\Scripts\python.exe tests\test_cli.py
-.\.venv\Scripts\python.exe tests\test_parallel.py
+# Run all tests automatically
+.\.venv\Scripts\python.exe -m unittest discover tests
 ```
+
+Individual test files:
+
+- `tests/test_integration_portal.py`: Verifies full login and dashboard extraction.
+- `tests/test_simulation.py`: Core logic and identity discovery.
+- `tests/test_video_logic.py`: SCORM player and API interaction.
+- `tests/test_settings.py`: Configuration and XML merging.
+- `tests/test_parallel.py`: Multi-threaded user handling.
 
 ---
 

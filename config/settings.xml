@@ -10,13 +10,13 @@
     <!-- Keep the automation silent (true/false) -->
     <MuteAudio>true</MuteAudio>
     <!-- Re-watch videos even if they are already marked 'Done' (true/false) -->
-    <ProcessCompletedVideos>True</ProcessCompletedVideos>
+    <ProcessCompletedVideos>false</ProcessCompletedVideos>
 
     <!-- PERFORMANCE & SCALE -->
     <!-- Number of different user accounts to process at once (1-5) -->
     <ConcurrentUsers>1</ConcurrentUsers>
     <!-- Number of videos per user to play simultaneously (1-10) -->
-    <VideosPerUser>5</VideosPerUser>
+    <VideosPerUser>1</VideosPerUser>
 
     <!-- BROWSER & CONNECTION -->
     <!-- Run browser hidden in the background (true/false) -->

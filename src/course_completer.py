@@ -133,7 +133,7 @@ def get_driver(settings_obj):
         
     chrome_options.add_argument("--window-size=1920,1080")
     chrome_options.add_argument("--disable-notifications")
-    chrome_options.add_argument("--incognito")  # Added to ensure portal accessibility
+    chrome_options.add_argument("--incognito")
     chrome_options.add_argument("--log-level=3")
     service = Service(ChromeDriverManager().install())
     return webdriver.Chrome(service=service, options=chrome_options)
@@ -195,7 +195,7 @@ def complete_scorm_video(driver, settings_obj, lesson_url, lesson_name, uid="Sys
                 # Main loop waiting for completion
                 for i in range(settings_obj.max_retries):
                     try:
-                        # 0. Defensive check: Is the driver/browser still alive?
+                        # Defensive check
                         try:
                             _ = driver.window_handles
                         except:
@@ -214,13 +214,9 @@ def complete_scorm_video(driver, settings_obj, lesson_url, lesson_name, uid="Sys
                         
                         if is_done:
                             should_close = True
-                            # If we are NOT fast-forwarding, we must ensure the video has actually finished.
                             if not settings_obj.fast_forward:
                                 try:
                                     driver.switch_to.frame(iframe)
-                                    # This script checks:
-                                    # 1. Is there a video element?
-                                    # 2. Is it currently playing/not ended?
                                     video_state = driver.execute_script("""
                                         var v = document.querySelector('video');
                                         if (!v) return 'no_video'; 
@@ -228,16 +224,13 @@ def complete_scorm_video(driver, settings_obj, lesson_url, lesson_name, uid="Sys
                                         if (v.duration > 0) return 'playing';
                                         return 'loading';
                                     """)
-                                    
                                     if video_state == 'playing' or video_state == 'loading':
                                         should_close = False
                                         if i % 3 == 0: 
                                             print(f"[{uid}]       - Video status: {video_state}. Waiting...")
                                     elif video_state == 'no_video' and i < 10:
-                                        # Give it a few retries to actually find the video element
                                         should_close = False
                                         if i % 3 == 0: print(f"[{uid}]       - Waiting for video player to load...")
-                                    
                                     driver.switch_to.default_content()
                                 except: pass
                             
@@ -248,15 +241,17 @@ def complete_scorm_video(driver, settings_obj, lesson_url, lesson_name, uid="Sys
                                 return True
                         
                         driver.switch_to.frame(iframe)
+                    except KeyboardInterrupt:
+                        print(f"[{uid}]       - [INFO] Interrupted by user. Cleaning up...")
+                        raise
                     except Exception as loop_e:
-                        pass # Small glitches ignored in loop
+                        pass
                     
                     time.sleep(5)
 
-                # Final Cleanup attempt if loop finished or broke
+                # Final Cleanup
                 try:
                     if len(driver.window_handles) > 1:
-                        # Attempt one last force push only if window is still open
                         driver.switch_to.default_content()
                         driver.execute_script(JS_FIND_API + "var api=findAPI(window); if(api){api.LMSSetValue('cmi.core.lesson_status', 'completed'); api.LMSCommit('');}")
                         print(f"[{uid}]       - [INFO] Closing popup.")
@@ -265,12 +260,9 @@ def complete_scorm_video(driver, settings_obj, lesson_url, lesson_name, uid="Sys
             except Exception as player_e:
                 print(f"      - [ERROR] Player interaction error: {player_e}")
             
-            # SAFE RETURN to main window
             try:
                 driver.switch_to.window(main_window)
-            except:
-                # If main window is somehow lost, relaunch in main logic
-                pass
+            except: pass
             return True
         return False
     except Exception as launch_e:
@@ -287,89 +279,99 @@ def process_user(driver, settings_obj, user):
     uid, pwd = user['Login_id'], user['Password']
     wait = WebDriverWait(driver, settings_obj.timeout)
     
-    # login
-    driver.get(URL_LOGIN)
-    wait.until(EC.presence_of_element_located((By.ID, "username"))).clear()
-    driver.find_element(By.ID, "username").send_keys(uid)
-    driver.find_element(By.ID, "password").clear()
-    driver.find_element(By.ID, "password").send_keys(pwd)
-    driver.find_element(By.ID, "submitform").click()
-    time.sleep(3)
-
-    # identity discovery
-    user_display = uid
-    module_info = "Unknown"
     try:
-        driver.get(URL_DASHBOARD)
-        time.sleep(2)
-        
-        # Try to find name specifically in the top bar (case-insensitive)
-        try:
-            name_el = driver.find_element(By.XPATH, "//body//*[contains(translate(text(), 'WELCOME', 'welcome'), 'welcome')]")
-            raw_text = name_el.text
-            if "welcome" in raw_text.lower():
-                name_only = raw_text.lower().split("welcome")[-1].split("\n")[0].strip()
-                # Restore original casing for name if possible
-                for p in raw_text.split("\n"):
-                    if "welcome" in p.lower():
-                        name_only = p.lower().split("welcome")[-1].strip().title()
-                user_display = f"{uid} [{name_only}]"
-        except: pass
-        
-        # Try to find module and type with even broader XPATHs
-        try:
-            # Search all elements that contain 'Module Enrolled' regardless of structure
-            page_text = driver.find_element(By.TAG_NAME, "body").text
-            for line in page_text.split("\n"):
-                if "Module Enrolled" in line:
-                    module_info = line.split("Enrolled:")[-1].strip()
-                if "Registration Type" in line:
-                    reg_type = line.split("Type:")[-1].strip()
-                    if module_info != "Unknown":
-                        module_info += f" ({reg_type})"
-                    else:
-                        module_info = reg_type
-        except: pass
-    except Exception as identity_e:
-        if settings_obj.info_only: print(f"      - [DEBUG] Identity check failed: {identity_e}")
-
-    # CLEAN COMBINED HEADER
-    print(f"\n[USER] {user_display} - Starting Automation...")
-    print(f"      > Module: {module_info}")
-    course_list = []
-    discovery_urls = [URL_COURSES, URL_DASHBOARD]
-    
-    for url in discovery_urls:
-        driver.get(url)
+        # login
+        driver.get(URL_LOGIN)
+        wait.until(EC.presence_of_element_located((By.ID, "username"))).clear()
+        driver.find_element(By.ID, "username").send_keys(uid)
+        driver.find_element(By.ID, "password").clear()
+        driver.find_element(By.ID, "password").send_keys(pwd)
+        driver.find_element(By.ID, "submitform").click()
         time.sleep(3)
-        links = driver.find_elements(By.XPATH, "//a[contains(@href, 'cid=')]")
-        for l in links:
-            href = l.get_attribute("href")
-            if "cid=" in href:
-                cid = href.split("cid=")[-1].split("&")[0] # handle extra params
-                if cid and cid.isdigit():
-                    course_list.append(cid)
+
+        # identity discovery
+        user_display = uid
+        module_info = "Unknown"
+        remaining_hours = "Unknown"
         
-        if course_list: break # Found courses on this page, move on
+        try:
+            driver.get(URL_DASHBOARD)
+            time.sleep(2)
+            try:
+                name_el = driver.find_element(By.XPATH, "//body//*[contains(translate(text(), 'WELCOME', 'welcome'), 'welcome')]")
+                raw_text = name_el.text
+                if "welcome" in raw_text.lower():
+                    name_only = raw_text.lower().split("welcome")[-1].split("\n")[0].strip()
+                    for p in raw_text.split("\n"):
+                        if "welcome" in p.lower():
+                            name_only = p.lower().split("welcome")[-1].strip().title()
+                    user_display = f"{uid} [{name_only}]"
+            except: pass
+            
+            try:
+                rem_el = driver.find_element(By.XPATH, "//span[contains(text(), 'Remaining')]/following::span[@class='info-box-number'][1]")
+                remaining_hours = rem_el.text.strip()
+            except:
+                try:
+                    page_text = driver.find_element(By.TAG_NAME, "body").text
+                    lines = page_text.split("\n")
+                    for i, line in enumerate(lines):
+                        if "Remaining (HH:MM)" in line:
+                            for j in range(i+1, min(i+4, len(lines))):
+                                potential_time = lines[j].strip()
+                                if ":" in potential_time and any(char.isdigit() for char in potential_time):
+                                    remaining_hours = potential_time
+                                    break
+                            if remaining_hours != "Unknown": break
+                except: pass
 
-    course_list = list(set(course_list))
-    
-    if settings_obj.course_id:
-        course_list = [c for c in course_list if c == settings_obj.course_id]
+            try:
+                page_text = driver.find_element(By.TAG_NAME, "body").text
+                for line in page_text.split("\n"):
+                    if "Module Enrolled" in line:
+                        module_info = line.split("Enrolled:")[-1].strip()
+                    if "Registration Type" in line:
+                        reg_type = line.split("Type:")[-1].strip()
+                        if module_info != "Unknown": module_info += f" ({reg_type})"
+                        else: module_info = reg_type
+            except: pass
+        except Exception as identity_e:
+            if settings_obj.info_only: print(f"      - [DEBUG] Identity check failed: {identity_e}")
 
-    print(f"[{uid}]   - Verified {len(course_list)} enrolled course(s).")
-
-    for cid in course_list:
-        course_url = f"https://onlinetraining.niapune.org.in/nlms/course/view.php?id={cid}"
-        print(f"[{uid}]   [COURSE] Scanning Module CID {cid}...")
+        final_header = f"[USER] {user_display}"
+        if remaining_hours != "Unknown":
+            final_header += f" [Remaining Hours : {remaining_hours}]"
+        final_header += " - Starting Automation..."
         
-        seen_in_run = set()
-        total_items = -1
-        while True:
+        print(f"\n{final_header}")
+        print(f"      > Module: {module_info}")
+        course_list = []
+        discovery_urls = [URL_COURSES, URL_DASHBOARD]
+        
+        for url in discovery_urls:
+            driver.get(url)
+            time.sleep(3)
+            links = driver.find_elements(By.XPATH, "//a[contains(@href, 'cid=')]")
+            for l in links:
+                href = l.get_attribute("href")
+                if "cid=" in href:
+                    cid = href.split("cid=")[-1].split("&")[0]
+                    if cid and cid.isdigit(): course_list.append(cid)
+            if course_list: break
+
+        course_list = list(set(course_list))
+        if settings_obj.course_id:
+            course_list = [c for c in course_list if c == settings_obj.course_id]
+
+        print(f"[{uid}]   - Verified {len(course_list)} enrolled course(s).")
+
+        for cid in course_list:
+            course_url = f"https://onlinetraining.niapune.org.in/nlms/course/view.php?id={cid}"
+            print(f"[{uid}]   [COURSE] Scanning Module CID {cid}...")
+            seen_in_run = set()
+            
             driver.get(course_url)
             time.sleep(4)
-            
-            # Handle expand all if present
             try:
                 driver.find_element(By.XPATH, "//a[contains(text(), 'Expand all')]").click()
                 time.sleep(1)
@@ -381,83 +383,80 @@ def process_user(driver, settings_obj, user):
                 content = item.text
                 is_done = "Done" in content
                 is_todo = "To do" in content or not is_done
-                
                 if settings_obj.replay_done or is_todo:
                     try:
                         anchor = item.find_element(By.CSS_SELECTOR, "a.aalink")
                         href = anchor.get_attribute("href")
+                        # Normalize URL: Keep only id and scoid
+                        # Example: mod/scorm/view.php?id=1234&scoid=5678
+                        base_url = href.split('?')[0]
+                        params = href.split('?')[-1].split('&')
+                        essential_params = [p for p in params if p.startswith('id=') or p.startswith('scoid=')]
+                        norm_href = base_url + ('?' + '&'.join(essential_params) if essential_params else '')
+                        
                         name = (anchor.text or anchor.get_attribute("title") or "Unknown").replace("SCORM package", "").strip()
-                        if href not in seen_in_run:
-                            to_process.append((name, href))
+                        to_process.append((name, href, norm_href))
                     except: pass
             
             if not to_process:
-                print(f"[{uid}]     - Module CID {cid}: All pending videos completed!")
-                break
-            
-            if total_items == -1:
-                total_items = len(to_process)
-            
-            if settings_obj.info_only:
-                print(f"[{uid}]     - [INFO ONLY] Found {total_items} pending videos for CID {cid}. Skipping playback.")
-                # Mark all as seen so we don't loop forever in while True
-                for t_name, t_url in to_process:
-                    seen_in_run.add(t_url)
+                print(f"[{uid}]     - Module CID {cid}: All videos already completed!")
                 continue
 
-            # Handle simultaneous execution
-            batch_size = settings_obj.simultaneous_videos
-            tasks = to_process[:batch_size]
-            
-            if batch_size > 1:
-                start_num = len(seen_in_run) + 1
-                end_num = min(len(seen_in_run) + len(tasks), total_items)
-                print(f"[{uid}]     - [SIMULTANEOUS] Processing batch {start_num}-{end_num} of {total_items}...")
-                def run_parallel_task(task_info):
-                    t_name, t_url = task_info
-                    # Find index within this specific course scan for a nicer name
-                    item_num = start_num + tasks.index(task_info)
-                    # Each thread needs its own driver and login
-                    try:
-                        t_driver = get_driver(settings_obj)
-                        # Quick login
-                        t_driver.get(URL_LOGIN)
-                        t_driver.find_element(By.ID, "username").send_keys(uid)
-                        t_driver.find_element(By.ID, "password").send_keys(pwd)
-                        t_driver.find_element(By.ID, "submitform").click()
-                        time.sleep(2)
-                        
-                        success = complete_scorm_video(t_driver, settings_obj, t_url, f"[{item_num}/{total_items}] {t_name}", uid)
-                        t_driver.quit()
-                        return success
-                    except Exception as e:
-                        print(f"[{uid}]     - [ERROR] Parallel task failed for {t_name}: {e}")
-                        try: t_driver.quit()
-                        except: pass
-                        return False
+            total_items = len(to_process)
+            print(f"[{uid}]     - Found {total_items} items to verify/process for CID {cid}")
 
-                with concurrent.futures.ThreadPoolExecutor(max_workers=batch_size) as executor:
-                    executor.map(run_parallel_task, tasks)
+            if settings_obj.info_only:
+                print(f"[{uid}]     - [INFO ONLY] Skipping playback.")
+                continue
+
+            batch_size = settings_obj.simultaneous_videos
+            # Process strictly in batches once
+            for i in range(0, total_items, batch_size):
+                tasks = to_process[i : i + batch_size]
                 
-                # Mark as seen
-                for t_name, t_url in tasks:
-                    seen_in_run.add(t_url)
-            else:
-                # Original sequential logic
-                target_name, target_url = tasks[0]
-                current_num = len(seen_in_run) + 1
-                try:
-                    complete_scorm_video(driver, settings_obj, target_url, f"[{current_num}/{total_items}] {target_name}", uid)
-                except Exception as e:
-                    print(f"[{uid}]     - [ERROR] Video interaction failed: {e}")
-                    if "connection" in str(e).lower() or "session id" in str(e).lower():
-                        raise e
-                seen_in_run.add(target_url)
+                if batch_size > 1:
+                    print(f"[{uid}]     - [SIMULTANEOUS] Processing batch {i+1}-{min(i+batch_size, total_items)} of {total_items}...")
+                    def run_parallel_task(task_info):
+                        t_name, t_url, t_norm = task_info
+                        item_idx = to_process.index(task_info) + 1
+                        try:
+                            t_driver = get_driver(settings_obj)
+                            t_driver.get(URL_LOGIN)
+                            t_driver.find_element(By.ID, "username").send_keys(uid)
+                            t_driver.find_element(By.ID, "password").send_keys(pwd)
+                            t_driver.find_element(By.ID, "submitform").click()
+                            time.sleep(2)
+                            complete_scorm_video(t_driver, settings_obj, t_url, f"[{item_idx}/{total_items}] {t_name}", uid)
+                            t_driver.quit()
+                        except Exception as e:
+                            print(f"[{uid}]     - [ERROR] Parallel task failed for {t_name}: {e}")
+                            try: t_driver.quit()
+                            except: pass
+
+                    with concurrent.futures.ThreadPoolExecutor(max_workers=batch_size) as executor:
+                        executor.map(run_parallel_task, tasks)
+                else:
+                    target_name, target_url, target_norm = tasks[0]
+                    current_num = i + 1
+                    try:
+                        complete_scorm_video(driver, settings_obj, target_url, f"[{current_num}/{total_items}] {target_name}", uid)
+                    except Exception as e:
+                        print(f"[{uid}]     - [ERROR] Video interaction failed: {e}")
+                        if "connection" in str(e).lower() or "session id" in str(e).lower(): raise e
+                
+                time.sleep(1)
             
-            time.sleep(2)
-            
-    print(f"[{uid}]   - Session for {uid} finished.")
-    driver.delete_all_cookies()
+            print(f"[{uid}]     - Module CID {cid}: Pass complete.")
+    except KeyboardInterrupt:
+        print(f"[{uid}]   - [INTERRUPTED] Stopping session for {uid}...")
+        raise
+    except Exception as e:
+        print(f"[{uid}]   - [ERROR] Session failed: {e}")
+        raise
+    finally:
+        print(f"[{uid}]   - Session for {uid} finished.")
+        try: driver.delete_all_cookies()
+        except: pass
 
 def run_user_parallel(user_data, settings_obj):
     """Task for a single user thread."""
@@ -473,57 +472,66 @@ def run_user_parallel(user_data, settings_obj):
             except: pass
 
 def main():
-    settings_obj = get_settings()
-    print("="*60)
-    print("🚀 NIA-AutoWatch-Bot v2.0 - STARTING")
-    print("="*60)
-    
-    if not os.path.exists(settings_obj.users_file):
-        print(f"[ERROR] {settings_obj.users_file} not found. Cannot start.")
-        return
+    try:
+        settings_obj = get_settings()
+        print("="*60)
+        print("🚀 NIA-AutoWatch-Bot v2.0 - STARTING")
+        print("="*60)
+        
+        if not os.path.exists(settings_obj.users_file):
+            print(f"[ERROR] {settings_obj.users_file} not found. Cannot start.")
+            return
 
-    # Ensure log directory exists
-    if not os.path.exists(LOG_DIR):
-        os.makedirs(LOG_DIR)
+        if not os.path.exists(LOG_DIR): os.makedirs(LOG_DIR)
 
-    users = []
-    with open(settings_obj.users_file, mode='r', encoding='utf-8') as f:
-        users = list(csv.DictReader(f))
+        users = []
+        with open(settings_obj.users_file, mode='r', encoding='utf-8') as f:
+            users = list(csv.DictReader(f))
 
-    if settings_obj.simultaneous_users > 1:
-        print(f"[INFO] Using Simultaneous User Threads: {settings_obj.simultaneous_users}")
-        with concurrent.futures.ThreadPoolExecutor(max_workers=settings_obj.simultaneous_users) as executor:
-            # Wrap settings_obj in the map call
-            futures = [executor.submit(run_user_parallel, u, settings_obj) for u in users]
-            concurrent.futures.wait(futures)
-    else:
-        # Sequential processing (original behavior)
-        driver = get_driver(settings_obj)
-        try:
-            for user_data in users:
-                # Self-healing: verify driver connection
+        if settings_obj.simultaneous_users > 1:
+            print(f"[INFO] Using Simultaneous User Threads: {settings_obj.simultaneous_users}")
+            with concurrent.futures.ThreadPoolExecutor(max_workers=settings_obj.simultaneous_users) as executor:
+                futures = [executor.submit(run_user_parallel, u, settings_obj) for u in users]
                 try:
-                    driver.title
-                except:
-                    print("[INFO] Re-initializing lost browser connection...")
-                    driver = get_driver(settings_obj)
+                    concurrent.futures.wait(futures)
+                except KeyboardInterrupt:
+                    print("\n[!] Ctrl+C detected. Shutting down threads...")
+                    executor.shutdown(wait=False, cancel_futures=True)
+                    raise
+        else:
+            driver = get_driver(settings_obj)
+            try:
+                for user_data in users:
+                    try:
+                        driver.title
+                    except:
+                        print("[INFO] Re-initializing lost browser connection...")
+                        driver = get_driver(settings_obj)
 
-                try:
-                    process_user(driver, settings_obj, user_data)
-                except Exception as fatal_user_e:
-                    print(f"[FATAL ERROR] User {user_data['Login_id']} session aborted: {fatal_user_e}")
-                    # Relaunch driver to ensure clean state for next user
+                    try:
+                        process_user(driver, settings_obj, user_data)
+                    except KeyboardInterrupt:
+                        raise
+                    except Exception as fatal_user_e:
+                        print(f"[FATAL ERROR] User {user_data['Login_id']} session aborted: {fatal_user_e}")
+                        try: driver.quit()
+                        except: pass
+                        driver = get_driver(settings_obj)
+            finally:
+                if driver:
                     try: driver.quit()
                     except: pass
-                    driver = get_driver(settings_obj)
-        finally:
-            if driver:
-                try: driver.quit()
-                except: pass
 
-    print("\n" + "="*60)
-    print("🎉 AUTOMATION FINISHED - ALL USERS PROCESSED")
-    print("="*60)
+        print("\n" + "="*60)
+        print("🎉 AUTOMATION FINISHED - ALL USERS PROCESSED")
+        print("="*60)
+    except KeyboardInterrupt:
+        print("\n\n" + "!"*60)
+        print("🛑 TERMINATED BY USER (Ctrl+C)")
+        print("Closing all active browser windows...")
+        print("!"*60 + "\n")
+    except Exception as e:
+        print(f"\n[CRITICAL ERROR] {e}")
 
 if __name__ == "__main__":
     main()
