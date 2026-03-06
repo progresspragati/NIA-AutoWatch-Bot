@@ -10,19 +10,19 @@
     <!-- Keep the automation silent (true/false) -->
     <MuteAudio>true</MuteAudio>
     <!-- Re-watch videos even if they are already marked 'Done' (true/false) -->
-    <ProcessCompletedVideos>false</ProcessCompletedVideos>
+    <ProcessCompletedVideos>True</ProcessCompletedVideos>
 
     <!-- PERFORMANCE & SCALE -->
     <!-- Number of different user accounts to process at once (1-5) -->
     <ConcurrentUsers>1</ConcurrentUsers>
     <!-- Number of videos per user to play simultaneously (1-10) -->
-    <VideosPerUser>1</VideosPerUser>
+    <VideosPerUser>5</VideosPerUser>
 
     <!-- BROWSER & CONNECTION -->
     <!-- Run browser hidden in the background (true/false) -->
     <HideBrowser>false</HideBrowser>
     <!-- Seconds to wait for page elements to load -->
-    <WaitTimeout>15</WaitTimeout>
+    <WaitTimeout>30</WaitTimeout>
     <!-- Max times to check for video completion per lesson -->
     <MaxCompletionChecks>500</MaxCompletionChecks>
 
